@@ -22,12 +22,11 @@
   <body>
     <h1>胸部単純X線画像による肺炎判定</h1>
     <h2><span style="color:blue;">作ったモデルの実装例です</h2>
-
-    <p>ファイルを選択、もしくはドラッグ&ドロップでこの上に画像を落とす</p>
-    <canvas id="xp-input" width="360" height="360">ブラウザがcanvasをサポートしていません</canvas>
     
     <!-- inputタグでファイルを選択 -->
-   <br>  <input type="file" id="fileInput" /> <br> 
+   <br> <input type="file" id="fileInput" /> <br> 
+   <p>ファイルを選択、もしくはドラッグ&ドロップでこの上に画像を落とす</p>
+   <canvas id="xp-input" width="360" height="360">ブラウザがcanvasをサポートしていません</canvas>
 
     <br>  <button id="hantei">　　　　　判定(初回は結果が出るまで時間がかかる場合があります)　　　　　</button>
 
@@ -49,20 +48,13 @@
       const CanvasXpInput = document.getElementById("xp-input");
       const ContextXpInput = CanvasXpInput.getContext('2d');
 
-      // 360 × 360 での表示領域
-      const CanvasForAI = document.getElementById("decoded-area");
-      const ContextForAI = CanvasForAI.getContext('2d');
-
+      // Get element of input tag
+		  const fileInput = document.getElementById("fileInput");
+    
       // 結果の表示領域
-	  <!-- set display area, treshould -->
+	    <!-- set display area, treshould -->
       let elem = document.getElementById('DisplayProbability')
       cutoff = 0.5; 
-
-      // マウス描画領域 に描かれた内容を 360×360表示領域 に表示
-      function DrawInputForAI() {
-        ContextForAI.drawImage(CanvasXpInput, 0, 0, 360, 360);
-        //console.log(ContextForAI);
-      }
 
       // inputタグの要素を取得
       const fileInput = document.getElementById("fileInput");
@@ -104,20 +96,14 @@
           // 画像読み込み
           image.src = reader.result;
           //console.log(image.src);
-          // 画像が読み込んだ後に実行する
-　      image.onload = function() {
-            // canvasに画像を表示する
-            ContextXpInput.drawImage(image, 0, 0, 720, 720);
-            DrawInputForAI();
-          }
         };
       }
 
       // 判定ボタンが押された
       document.getElementById('hantei').addEventListener('click', function () {
-        // 180×180 XP表示領域の画像データーを取り込む
+        // Import the image data (360×360 color) from the XP display area
         // https://js.tensorflow.org/api/1.0.0/#browser.fromPixels
-        tfData = tf.browser.fromPixels(CanvasForAI, 3);
+        tfData = tf.browser.fromPixels(CanvasXpInput, 3);
         // 浮動小数点にするが255で割らない
         // さらに次元を追加して [360,360,3] -> [1,360,360,3] にする
         tfAIdata = tfData.toFloat().expandDims();
