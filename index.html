@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="ja">
+<!-- 胸部単純X線画像による肺炎判定するWebアプリケーション -->
+<!-- 前提として、tensorflowモデルが本ファイルと同じ位置に pneumonia_model_jsフォルダーとして存在 -->
+<!-- 前提として、モデルの入力は[1,360,360,3]つまり360×360のカラー -->
+<!-- 前提として、モデルの出力は肺炎である確率 -->
+
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>胸部単純X線画像による肺炎判定</title>
+    <style>
+     body    {background-color: powderblue;}
+     h1      {font-family: courier; color: black; }
+     h2      {font-family: courier; color: blue; }
+     p       {font-family: courier; color: red; }
+     canvas {background-color: black; }
+    </style>
+  </head>
+
+  <body>
+    <h1>胸部単純X線画像による肺炎判定</h1>
+    <h2><span style="color:blue;">作ったモデルの実装例です</h2>
+
+    <p>ファイルを選択、もしくはドラッグ&ドロップでこの上に画像を落とす</p>
+    <canvas id="xp-input" width="720" height="720">ブラウザがcanvasをサポートしていません</canvas>
+    
+    <!-- inputタグでファイルを選択 -->
+   <br>  <input type="file" id="fileInput" /> <br> 
+
+    <p>360 × 360 にした入力画像が以下に表示されます</p>    
+    <canvas id="decoded-area" width="360" height="360">ブラウザがcanvasをサポートしていません</canvas>
+
+    <br>  <button id="hantei">　　　　　判定(初回は結果が出るまで時間がかかる場合があります)　　　　　</button>
+
+    <h2>判定結果　肺炎確率が出ます(判定まで暫くお待ち下さい)</h2>
+	<div id="DisplayProbability" style="font-family: courier; color:red; font-size: 120%;">肺炎の確率: <span id="Probability"></span></div>
+
+    <script>    
+      // ドラッグ要素がドロップ要素に重なっている間
+      window.addEventListener("dragover", function(evt) {
+        evt.preventDefault();  // ブラウザのデフォルトの画像表示処理をOFF
+      }, false);
+    </script>    
+    
+    <!-- Load TensorFlow.js: https://www.tensorflow.org/js/tutorials/setup?hl=ja -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs/dist/tf.min.js"></script>
+ 
+    <script>    
+      // XPの入力領域
+      const CanvasXpInput = document.getElementById("xp-input");
+      const ContextXpInput = CanvasXpInput.getContext('2d');
+
+      // 360 × 360 での表示領域
+      const CanvasForAI = document.getElementById("decoded-area");
+      const ContextForAI = CanvasForAI.getContext('2d');
+
+      // 結果の表示領域
+	  <!-- set display area, treshould -->
+      let elem = document.getElementById('DisplayProbability')
+      cutoff = 0.5; 
+
+      // マウス描画領域 に描かれた内容を 360×360表示領域 に表示
+      function DrawInputForAI() {
+        ContextForAI.drawImage(CanvasXpInput, 0, 0, 360, 360);
+        //console.log(ContextForAI);
+      }
+
+      // inputタグの要素を取得
+      const fileInput = document.getElementById("fileInput");
+
+      // モデルの読み込み
+      let PNEUMONIAmodel;
+      async function LoadPNEUMONIAmodel(){
+        // Load PNEUMONIA model
+        PNEUMONIAmodel = await tf.loadLayersModel('./tmdu_pneumonia_model_js/model.json');
+      }
+      LoadPNEUMONIAmodel();
+
+      // 結果(肺炎である確率)の保存領域
+      let ProbabilityForAbormal;
+
+      // ファイルが選択されたら、読み込む
+      fileInput.addEventListener("change", function (event) {
+        const file = event.target.files[0];
+        console.log(file);
+        readFile(file);
+      });
+      
+      // ドロップ時、読み込む
+      window.addEventListener("drop", function(evt) {
+        evt.preventDefault();  // ブラウザのデフォルトの画像表示処理をOFF
+        const file = evt.dataTransfer.files[0];
+        console.log(file);
+        readFile(file);
+      });
+
+      // FileReader APIを使ってファイルを読み込む関数
+      function readFile(file) {
+        let image = new Image();
+        const reader = new FileReader();
+        // ファイルを読み込む
+        reader.readAsDataURL(file);
+        // ファイル読み込みが完了したら、結果を表示
+        reader.onload = function (event) {
+          // 画像読み込み
+          image.src = reader.result;
+          //console.log(image.src);
+          // 画像が読み込んだ後に実行する
+　      image.onload = function() {
+            // canvasに画像を表示する
+            ContextXpInput.drawImage(image, 0, 0, 720, 720);
+            DrawInputForAI();
+          }
+        };
+      }
+
+      // 判定ボタンが押された
+      document.getElementById('hantei').addEventListener('click', function () {
+        // 180×180 XP表示領域の画像データーを取り込む
+        // https://js.tensorflow.org/api/1.0.0/#browser.fromPixels
+        tfData = tf.browser.fromPixels(CanvasForAI, 3);
+        // 浮動小数点にするが255で割らない
+        // さらに次元を追加して [360,360,3] -> [1,360,360,3] にする
+        tfAIdata = tfData.toFloat().expandDims();
+        //tfAIdata = tfData.toFloat().div(tf.scalar(255)).expandDims();
+        // 推論
+        runInference(tfAIdata); 
+        // 表示
+        <!--  display result  [ProbabilityForAbormal] -->
+        if (ProbabilityForAbormal < cutoff){
+          elem.style.color = "green";
+        }
+        else{
+          elem.style.color = "red";
+        } <!-- End of  if (ProbabilityForAbormal < cutoff) -->
+        <!-- set display value -->
+        displaytext = " 肺炎の確率は" + (ProbabilityForAbormal).toFixed(3);
+        elem.innerText = displaytext;
+          // console.log(i);
+        console.log(ProbabilityForAbormal);
+      });
+
+    <!-- Deep Learning inference -->
+    function runInference(x1){
+      // メモリーリーク対策のためtf.tidyを使用
+      tf.tidy(() => {
+        const y1 = PNEUMONIAmodel.predict(x1); 
+        console.log(y1);
+        ProbabilityForAbormal = y1.reshape([-1]).arraySync()[0];
+        return;
+      });
+    }
+    <!-- End of Deep Learning inference -->
+
+    </script>
+
+    <!-- ブラウザでJavascriptが有効になっていない -->
+    <noscript>
+    <p>動きません!</p>
+    <p>Javascriptをオンにして下さい!</p>
+    </noscript>
+
+  </body>
+</html>
