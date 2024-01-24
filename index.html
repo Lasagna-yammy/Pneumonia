@@ -1,65 +1,43 @@
 <!DOCTYPE html>
 <html lang="ja">
-<!-- 胸部単純X線画像による肺炎判定するWebアプリケーション -->
-<!-- 前提として、tensorflowモデルが本ファイルと同じ位置に pneumonia_model_jsフォルダーとして存在 -->
-<!-- 前提として、モデルの入力は[1,360,360,3]つまり360×360のカラー -->
-<!-- 前提として、モデルの出力は肺炎である確率 -->
 
   <head>
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>胸部単純X線画像による肺炎判定</title>
+    <title>Pneumonia determination using plain chest X-ray images</title>
     <style>
      body    {background-color: powderblue;}
      h1      {font-family: courier; color: black; }
-     h2      {font-family: courier; color: blue; }
      p       {font-family: courier; color: red; }
      canvas {background-color: black; }
     </style>
   </head>
 
   <body>
-    <h1>胸部単純X線画像による肺炎判定</h1>
-    <h2><span style="color:blue;">作ったモデルの実装例です</h2>
+    <h1>Pneumonia determination using plain chest X-ray images</h1>
     
-    <!-- inputタグでファイルを選択 -->
-   <br> <input type="file" id="fileInput" /> <br> 
-   <p>ファイルを選択、もしくはドラッグ&ドロップでこの上に画像を落とす</p>
-   <canvas id="xp-input" width="360" height="360">ブラウザがcanvasをサポートしていません</canvas>
+    <!-- Select file with input tag -->
+    <canvas id="xp-input" width="360" height="360">Browser does not support canvas</canvas>
+    <br> <input type="file" id="fileInput" /> <br> 
+    <p>Select the file or drag and drop the image onto this</p>
 
-    <br>  <button id="hantei">　　　　　判定(初回は結果が出るまで時間がかかる場合があります)　　　　　</button>
+    <br>  <button id="hantei">　　　　　Judgement　　　　　</button>
 
-    <h2>判定結果　肺炎確率が出ます(判定まで暫くお待ち下さい)</h2>
-	<div id="DisplayProbability" style="font-family: courier; color:red; font-size: 120%;">肺炎の確率: <span id="Probability"></span></div>
+    <h2>Judgment result: Pneumonia probability will be displayed (please wait for a while until the judgment is made)</h2>
+	  <div id="DisplayProbability" style="font-family: courier; color:red; font-size: 120%;">Probability of pneumonia: <span id="Probability"></span></div>
 
     <script>    
-      // ドラッグ要素がドロップ要素に重なっている間
+      // While the drag element overlaps the drop element
       window.addEventListener("dragover", function(evt) {
-        evt.preventDefault();  // ブラウザのデフォルトの画像表示処理をOFF
-      }, false);
+        evt.preventDefault();   }, false);
     </script>    
     
     <!-- Load TensorFlow.js: https://www.tensorflow.org/js/tutorials/setup?hl=ja -->
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs/dist/tf.min.js"></script>
  
-    <script>    
-      // XPの入力領域
-      const CanvasXpInput = document.getElementById("xp-input");
-      const ContextXpInput = CanvasXpInput.getContext('2d');
-
-      // Get element of input tag
-		  const fileInput = document.getElementById("fileInput");
-    
-      // 結果の表示領域
-	    <!-- set display area, treshould -->
-      let elem = document.getElementById('DisplayProbability')
-      cutoff = 0.5; 
-
-      // inputタグの要素を取得
-      const fileInput = document.getElementById("fileInput");
-
-      // モデルの読み込み
+    <script> 
+      // PreLoad the models
       let PNEUMONIAmodel;
       async function LoadPNEUMONIAmodel(){
         // Load PNEUMONIA model
@@ -67,50 +45,69 @@
       }
       LoadPNEUMONIAmodel();
 
-      // 結果(肺炎である確率)の保存領域
+      // XP input area
+      const CanvasXpInput = document.getElementById("xp-input");
+      const ContextXpInput = CanvasXpInput.getContext('2d');
+
+      // Get element of input tag
+		  const fileInput = document.getElementById("fileInput");
+    
+      // Results display area
+	    //set display area, treshould
+      let elem = document.getElementById('DisplayProbability')
+      cutoff = 0.5; 
+
+      // Storage area for results (probability of pneumonia)
       let ProbabilityForAbormal;
 
-      // ファイルが選択されたら、読み込む
+      // Chest X-P image input        
+		  let image_filename = "";
+      // If the file is selected, load it
       fileInput.addEventListener("change", function (event) {
-        const file = event.target.files[0];
-        console.log(file);
-        readFile(file);
+        image_filename = event.target.files[0];
+        console.log(image_filename);
+        readFile(image_filename);
       });
       
-      // ドロップ時、読み込む
+      // Load on drop
       window.addEventListener("drop", function(evt) {
-        evt.preventDefault();  // ブラウザのデフォルトの画像表示処理をOFF
-        const file = evt.dataTransfer.files[0];
-        console.log(file);
-        readFile(file);
+        evt.preventDefault();
+        image_filename = evt.dataTransfer.files[0];
+        console.log(image_filename);
+        readFile(image_filename);
       });
 
-      // FileReader APIを使ってファイルを読み込む関数
+      // FileReader : Function to read file using API
       function readFile(file) {
         let image = new Image();
         const reader = new FileReader();
-        // ファイルを読み込む
+        // Load file
         reader.readAsDataURL(file);
-        // ファイル読み込みが完了したら、結果を表示
+        // If the file loading is complete, display the results
         reader.onload = function (event) {
-          // 画像読み込み
+          // Load image
           image.src = reader.result;
           //console.log(image.src);
+          // Run after loading the image
+				  image.onload = function () {
+					// Display the image on canvas
+					ContextXpInput.drawImage(image, 0, 0, 360, 360);
+				   } 
         };
       }
 
-      // 判定ボタンが押された
+      // Judgment button was pressed
       document.getElementById('hantei').addEventListener('click', function () {
         // Import the image data (360×360 color) from the XP display area
         // https://js.tensorflow.org/api/1.0.0/#browser.fromPixels
         tfData = tf.browser.fromPixels(CanvasXpInput, 3);
-        // 浮動小数点にするが255で割らない
-        // さらに次元を追加して [360,360,3] -> [1,360,360,3] にする
+        // Make it a floating point but do not divide by 255
+        // Add more dimensions to [360,360,3] -> [1,360,360,3]
         tfAIdata = tfData.toFloat().expandDims();
         //tfAIdata = tfData.toFloat().div(tf.scalar(255)).expandDims();
-        // 推論
+        // Inference
         runInference(tfAIdata); 
-        // 表示
+        // Display the result
         <!--  display result  [ProbabilityForAbormal] -->
         if (ProbabilityForAbormal < cutoff){
           elem.style.color = "green";
@@ -127,7 +124,7 @@
 
     <!-- Deep Learning inference -->
     function runInference(x1){
-      // メモリーリーク対策のためtf.tidyを使用
+      // Use tf.tidy to prevent memory leaks
       tf.tidy(() => {
         const y1 = PNEUMONIAmodel.predict(x1); 
         console.log(y1);
@@ -139,10 +136,10 @@
 
     </script>
 
-    <!-- ブラウザでJavascriptが有効になっていない -->
+    <!-- Javascript is not enabled in your browser -->
     <noscript>
-    <p>動きません!</p>
-    <p>Javascriptをオンにして下さい!</p>
+    <p>It doesn't move!</p>
+    <p>Please turn on Javascript!</p>
     </noscript>
 
   </body>
